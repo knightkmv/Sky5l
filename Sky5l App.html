@@ -1,0 +1,301 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>SKY5LChess Pro Enhanced</title>
+<link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet"/>
+<script src="https://cdn.jsdelivr.net/npm/jquery@3.6.0/dist/jquery.min.js"></script>
+<link href="https://unpkg.com/@chrisoakman/chessboardjs@1.0.0/dist/chessboard-1.0.0.min.css" rel="stylesheet"/>
+<script crossorigin="anonymous" integrity="sha384-8Vi8VHwn3vjQ9eUHUxex3JSN/NFqUg3QbPyX8kWyb93+8AC/pPWTzj+nHtbC5bxD" src="https://unpkg.com/@chrisoakman/chessboardjs@1.0.0/dist/chessboard-1.0.0.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chess.js@0.11.0/chess.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/stockfish@11.0.0/src/stockfish.asm.min.js"></script>
+                
+<!-- Bootstrap and Bootstrap Table -->
+<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.2.3/dist/css/bootstrap.min.css" rel="stylesheet"/>
+<link href="https://unpkg.com/bootstrap-table@1.21.4/dist/bootstrap-table.min.css" rel="stylesheet"/>
+<link href="https://drive.google.com/file/d/1UIRJHgLZLo5WLHm3dSioBI9QMZiPgsvi/view?usp=drivesdk" rel="stylesheet" >
+
+</head>
+<body>
+<div class="container">
+<div class="board-container">
+<div id="myBoard"></div>
+<div class="clock-container" id="clockContainer" style="display: none;">
+<div class="clock white" id="whiteClock">10:00</div>
+<div class="clock black" id="blackClock">10:00</div>
+</div>
+<div class="controls">
+<button class="icon-btn" id="startBtn"><i class="fas fa-plus"></i> <span>New Game</span></button>
+<button class="icon-btn" id="editBtn"><i class="fas fa-edit"></i> <span>Edit Board</span></button>
+<button class="icon-btn" id="flipOrientationBtn"><i class="fas fa-sync-alt"></i> <span>Flip Board</span></button>
+<button class="icon-btn" id="goBackBtn"><i class="fas fa-undo"></i> <span>Undo</span></button>
+<button class="icon-btn" id="goForwardBtn"><i class="fas fa-redo"></i> <span>Redo</span></button>
+<button class="icon-btn" id="pgnBtn"><i class="fas fa-file-import"></i> <span>PGN</span></button>
+<button class="icon-btn" disabled="" id="playPauseBtn"><i class="fas fa-play"></i> <span>Play</span></button>
+<button class="icon-btn" id="engineSolveBtn"><i class="fas fa-robot"></i> <span>Engine</span></button>
+<button class="icon-btn" id="hintBtn"><i class="fas fa-lightbulb"></i> <span>Hint</span></button>
+<button class="icon-btn" id="togglePanelBtn"><i class="fas fa-list"></i> <span>Panel</span></button>
+<button class="icon-btn" id="engineSettingsBtn"><i class="fas fa-truck-monster"></i> <span>Engine</span></button>
+<button class="icon-btn" id="puzzleBtn"><i class="fas fa-puzzle-piece"></i> <span>Puzzle</span></button>
+<button class="icon-btn" id="analysisBtn"><i class="fas fa-chart-line"></i> <span>Analyze</span></button>
+<button class="icon-btn not-signed-in" id="signinBtn"><i class="fas fa-sign-in-alt"></i> <span>Sign in</span></button>
+</div>
+<!-- PGN Options Panel -->
+<div class="pgn-options" id="pgnOptions">
+<button class="pgn-option" id="exportPgnBtn"><i class="fas fa-file-export"></i> Export PGN</button>
+<button class="pgn-option" id="importSinglePgnBtn"><i class="fas fa-file-import"></i> Import Single Game/Puzzle</button>
+<button class="pgn-option" id="importMultiPgnBtn"><i class="fas fa-file-import"></i> Import Multiple Games/Puzzles</button>
+<button class="pgn-option" id="cancelPgnBtn"><i class="fas fa-times"></i> Cancel</button>
+</div>
+<div class="pgn-container" id="pgnContainer">
+<textarea id="pgnInput" placeholder="Paste PGN here..."></textarea>
+<div class="file-input-container">
+<label class="file-input-label" for="pgnFileInput">
+<i class="fas fa-file-import"></i> Select PGN file
+                    </label>
+<input accept=".pgn,.txt" id="pgnFileInput" type="file"/>
+</div>
+<div class="pgn-buttons">
+<button id="loadPgnBtn"><i class="fas fa-check"></i> Load PGN</button>
+<button id="cancelImportBtn"><i class="fas fa-times"></i> Cancel</button>
+</div>
+</div>
+<div class="database-selector" id="databaseSelector">
+<div class="database-list">
+<table data-click-to-select="true" data-filter-control="true" data-page-size="5" data-pagination="true" data-search="true" data-show-columns="true" data-single-select="true" data-toggle="table" id="databaseTable">
+<thead>
+<tr>
+<th data-checkbox="true" data-field="state"></th>
+<th data-field="white" data-filter-control="input" data-sortable="true">White</th>
+<th data-field="black" data-filter-control="input" data-sortable="true">Black</th>
+<th data-field="result" data-filter-control="select" data-sortable="true">Result</th>
+<th data-field="event" data-filter-control="input" data-sortable="true">Event</th>
+<th data-field="date" data-sortable="true">Date</th>
+</tr>
+</thead>
+</table>
+</div>
+<div class="pgn-buttons">
+<button id="loadDatabaseBtn"><i class="fas fa-check"></i> Load Selected</button>
+<button id="cancelDatabaseBtn"><i class="fas fa-times"></i> Cancel</button>
+</div>
+</div>
+<div class="hint-container" id="hintContainer">
+<div class="hint-text" id="hintText"></div>
+</div>
+<div class="side-panel" id="sidePanel">
+<div class="panel-header" id="panelHeader">
+<span>Game Panel</span>
+<i class="fas fa-chevron-down" id="panelToggleIcon"></i>
+</div>
+<div class="panel-content" id="panelContent">
+<div class="move-list" id="moveList"></div>
+<div class="info-log" id="infoLog">
+<div class="engine-info">
+<div class="engine-info-title">Engine Information</div>
+<div class="engine-info-content" id="engineInfoContent">No engine activity</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+
+<!-- Loading overlay -->
+<div class="loading-overlay" id="loadingOverlay">
+<div class="spinner"></div>
+</div>
+
+<!-- Modal for AI side selection -->
+<div class="modal" id="aiSideModal">
+<div class="modal-content">
+<div class="modal-title">AI will play as:<br><small>Current turn: White</small></div>
+<div class="modal-buttons">
+<button class="modal-btn white" id="aiWhiteBtn">White</button>
+<button class="modal-btn black" id="aiBlackBtn">Black</button>
+<button class="modal-btn cancel" id="aiCancelBtn">Cancel</button>
+</div>
+</div>
+</div>
+
+<!-- Modal for login/signup -->
+<div class="modal" id="loginModal">
+<div class="modal-content">
+<div class="modal-title">Sign in / Register</div>
+<div class="login-form">
+<input id="loginEmail" placeholder="Email" required="" type="email"/>
+<input id="loginPassword" placeholder="Password" required="" type="password"/>
+<button id="loginSubmitBtn">Sign in</button>
+<button id="registerBtn">Register</button>
+<div class="login-message" id="loginMessage"></div>
+</div>
+</div>
+</div>
+
+<!-- Modal for new game settings -->
+<div class="new-game-modal" id="newGameModal">
+<div class="new-game-content">
+<div class="new-game-title">New Game Settings</div>
+<div class="new-game-form">
+<div class="new-game-group">
+<label class="new-game-label">Game Mode:</label>
+<select class="new-game-select" id="gameModeSelect">
+<option value="humanVsHuman">Human vs Human</option>
+<option value="humanVsAI">Human vs AI</option>
+<option value="aiVsAI">AI vs AI</option>
+<option value="puzzle">Puzzle Mode</option>
+</select>
+</div>
+<div class="new-game-group">
+<label class="new-game-label">Game Variant:</label>
+<select class="new-game-select" id="gameVariantSelect">
+<option value="standard">Standard</option>
+<option value="960">Chess 960</option>
+<option value="atomic">Atomic</option>
+<option value="kingofthehill">King of the Hill</option>
+<option value="threecheck">Three-check</option>
+<option value="horde">Horde</option>
+<option value="racingkings">Racing Kings</option>
+<option value="crazyhouse">Crazyhouse</option>
+<option value="antichess">Antichess</option>
+<option value="chessgi">ChessGI</option>
+</select>
+</div>
+<div class="new-game-group">
+<label class="new-game-label">Clock:</label>
+<select class="new-game-select" id="clockSelect">
+<option value="none">No Clock</option>
+<option value="bullet">Bullet (1 min)</option>
+<option value="blitz">Blitz (5 min)</option>
+<option value="rapid">Rapid (10 min)</option>
+<option value="classical">Classical (30 min)</option>
+<option value="custom">Custom Time</option>
+</select>
+</div>
+<div class="new-game-group" id="customTimeGroup" style="display: none;">
+<label class="new-game-label">Custom Time (minutes):</label>
+<input class="new-game-select" id="customTimeInput" type="number" min="1" max="120" value="10">
+</div>
+
+<!-- Theme Selector -->
+<div class="new-game-group theme-selector-group">
+<label class="new-game-label theme-selector-title">Board Theme:</label>
+<div class="theme-selector-options">
+<div class="theme-btn theme-default selected" data-theme="default" id="themeDefault"></div>
+<div class="theme-btn theme-blue" data-theme="blue" id="themeBlue"></div>
+<div class="theme-btn theme-green" data-theme="green" id="themeGreen"></div>
+<div class="theme-btn theme-dark" data-theme="dark" id="themeDark"></div>
+</div>
+</div>
+
+<!-- Piece Theme Selector -->
+<div class="new-game-group piece-theme-group">
+<label class="new-game-label piece-theme-title">Piece Theme:</label>
+<div class="piece-theme-options">
+<div class="piece-theme-btn selected" data-piece-theme="default" id="pieceThemeDefault">D</div>
+<div class="piece-theme-btn" data-piece-theme="alpha" id="pieceThemeAlpha">A</div>
+<div class="piece-theme-btn" data-piece-theme="leipzig" id="pieceThemeLeipzig">L</div>
+<div class="piece-theme-btn" data-piece-theme="merida" id="pieceThemeMerida">M</div>
+</div>
+</div>
+</div>
+<div class="new-game-buttons">
+<button class="new-game-btn start" id="newGameStartBtn">Start Game</button>
+<button class="new-game-btn cancel" id="newGameCancelBtn">Cancel</button>
+</div>
+</div>
+</div>
+
+<!-- Modal for engine settings -->
+<div class="engine-settings-modal" id="engineSettingsModal">
+<div class="engine-settings-content">
+<div class="engine-settings-title">Engine Settings</div>
+<div class="engine-settings-form">
+<div class="engine-settings-group">
+<label class="engine-settings-label">Select Engine:</label>
+<select class="engine-settings-select" id="engineSelect">
+<option value="stockfish">Stockfish</option>                 
+<option value="sky5l">SKY5L</option>
+<option value="custom">Local Engine</option>
+<option disabled="" value="server">Quantum5L (Login)</option>
+</select>
+
+<select class="engine-settings-select" id="engineSelect">
+  <option value="sky5l">SKY5L</option>
+  <option value="stockfish">Stockfish</option>
+</select>
+
+</div>
+<div class="engine-settings-group" id="customEngineGroup" style="display: none;">
+<label class="engine-settings-label">Custom Engine Path:</label>
+<input class="engine-settings-select" id="customEnginePath" placeholder="Path to engine executable" type="text"/>
+</div>
+<div class="engine-settings-group">
+<label class="engine-settings-label">Skill Level:</label>
+<select class="engine-settings-select" id="skillLevelSelect">
+<option value="1">Level 1 (Beginner)</option>
+<option value="3">Level 3 (Easy)</option>
+<option value="5">Level 5 (Intermediate)</option>
+<option value="7">Level 7 (Advanced)</option>
+<option selected="" value="9">Level 9 (Expert)</option>
+</select>
+</div>
+<div class="engine-settings-group">
+<label class="engine-settings-label">Search Depth:</label>
+<select class="engine-settings-select" id="searchDepthSelect">
+<option value="1">1 ply (Fastest)</option>
+<option value="2">2 ply</option>
+<option value="3">3 ply</option>
+<option selected="" value="4">4 ply (Balanced)</option>
+<option value="5">5 ply</option>
+<option value="6">6 ply (Strongest)</option>
+</select>
+</div>
+</div>
+<div class="engine-settings-buttons">
+<button class="engine-settings-btn apply" id="engineSettingsApplyBtn">Apply</button>
+<button class="engine-settings-btn cancel" id="engineSettingsCancelBtn">Cancel</button>
+</div>
+</div>
+</div>
+
+<!-- Analysis Modal -->
+<div class="modal" id="analysisModal">
+<div class="modal-content analysis-modal-content">
+<div class="modal-title">Game Analysis</div>
+<div id="analysisContent" style="max-height: 70vh; overflow-y: auto;">
+<div class="analysis-section">
+<div class="analysis-section-title">Evaluation Graph</div>
+<div class="analysis-chart-container">
+<canvas id="analysisChart"></canvas>
+</div>
+</div>
+<div class="analysis-section">
+<div class="analysis-section-title">Move Analysis</div>
+<div id="moveAnalysisContent"></div>
+</div>
+<div class="analysis-section">
+<div class="analysis-section-title">Key Moments</div>
+<div id="keyMomentsContent"></div>
+</div>
+<div class="analysis-section">
+<div class="analysis-section-title">Opening Information</div>
+<div id="openingInfoContent"></div>
+</div>
+</div>
+<div class="modal-buttons">
+<button class="modal-btn cancel" id="closeAnalysisBtn">Close</button>
+</div>
+</div>
+</div>
+
+<!-- Bootstrap and Bootstrap Table JS -->
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.2.3/dist/js/bootstrap.bundle.min.js"></script>
+<script src="https://unpkg.com/bootstrap-table@1.21.4/dist/bootstrap-table.min.js"></script>
+<script src="https://unpkg.com/bootstrap-table@1.21.4/dist/extensions/filter-control/bootstrap-table-filter-control.min.js"></script>
+<script src="sky5l.js"></script>
+
+</body>
+</html>
