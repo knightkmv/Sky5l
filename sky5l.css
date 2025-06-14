@@ -964,4 +964,71 @@
             z-index: 20;
             max-width: 200px;
         }
+    /* Accessibility improvements */
+    button:focus, input:focus, select:focus {
+        outline: 2px solid #4d90fe;
+        outline-offset: 2px;
+    }
+    
+    /* Loading states */
+    .loading-state {
+        position: relative;
+        opacity: 0.7;
+    }
+    .loading-state::after {
+        content: "";
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        width: 20px;
+        height: 20px;
+        margin: -10px 0 0 -10px;
+        border: 2px solid #f3f3f3;
+        border-top: 2px solid #3498db;
+        border-radius: 50%;
+        animation: spin 1s linear infinite;
+    }
+    
+    @keyframes spin {
+        0% { transform: rotate(0deg); }
+        100% { transform: rotate(360deg); }
+    }
+    
+    /* Error messages */
+    .error-message {
+        color: #d9534f;
+        background-color: #f2dede;
+        padding: 10px;
+        border-radius: 4px;
+        margin: 10px 0;
+        display: none;
+    }
+    
+    /* Sound control */
+    .sound-control {
+        position: fixed;
+        bottom: 20px;
+        right: 20px;
+        z-index: 1000;
+    }
+    
+    /* Responsive adjustments */
+    @media (max-width: 768px) {
+        .controls {
+            flex-wrap: wrap;
+        }
+        .icon-btn {
+            min-width: 40px;
+            padding: 5px;
+        }
+        .icon-btn span {
+            display: none;
+        }
+    }
+    
+    /* Tutorial highlight */
+    .tutorial-highlight {
+        box-shadow: 0 0 0 3px rgba(66, 153, 225, 0.5);
+        transition: all 0.3s ease;
+    }
     
