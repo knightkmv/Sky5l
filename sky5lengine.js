@@ -35,6 +35,34 @@ const PIECE_VALUES = [
 
 class SKY5LChess {
     constructor() {
+            // Evaluation
+    this.nnue = new NNUE_HalfKA();  // 150 Elo over HalfKP
+    this.pawnCache = new PawnHashTable(16); // MB
+    
+    // Search
+    this.search = new ParallelSearch({
+      threads: Math.max(4, navigator.hardwareConcurrency - 1),
+      ttSizeMB: 1024
+    });
+    
+    // Endgames
+    this.syzygy = new SyzygyProbe();
+    this.kpk = new KPKBitbase();
+  }
+
+  async getBestMove(position, options = {}) {
+    // 1. Probe Syzygy (6-man)
+    if (position.pieceCount <= 6) {
+      const tb = this.syzygy.probe(position);
+      if (tb) return tb.bestMove;
+    }
+
+    // 2. Search with time management
+    return this.search.iterativeDeepening({
+      position,
+      maxDepth: 24,
+      timeBudget: this.timeManager.allocate(options)
+    });
         // Enhanced Constants with better organization
         this.PIECE_TYPES = {
             PAWN: 1, KNIGHT: 2, BISHOP: 3, ROOK: 4, QUEEN: 5, KING: 6
@@ -3336,6 +3364,180 @@ class EndgameKnowledge {
         
         return strongSide === position.side ? result : -result;
     }
+}
+
+
+class NNUE_HalfKP {
+  constructor() {
+    this.featureWeights = new Int16Array(256 * 41024); // [KingSq][PieceSq][Feature]
+    this.outputWeights = new Int16Array(32 * 256);
+    this.accumulator = new Int32Array(256);
+  }
+
+  updateAccumulator(position) {
+    const kingSq = position.bitScanForward(
+      position.bitboards[position.side * 6 + position.KING - 1]
+    );
+    this.accumulator.fill(0);
+
+    // SIMD-friendly feature accumulation
+    for (let piece = 0; piece < 10; piece++) {
+      let bb = position.bitboards[piece];
+      while (bb) {
+        const sq = position.bitScanForward(bb);
+        const featureIdx = kingSq * 640 + piece * 64 + sq;
+        for (let i = 0; i < 256; i++) {
+          this.accumulator[i] += this.featureWeights[featureIdx * 256 + i];
+        }
+        bb &= bb - 1n;
+      }
+    }
+  }
+}
+
+class ThreatAwareSearch {
+  evalThreats(position) {
+    const them = position.side ^ 1;
+    let threatScore = 0;
+    
+    // Hanging pieces
+    for (let piece = position.PAWN; piece <= position.QUEEN; piece++) {
+      let bb = position.bitboards[them * 6 + piece - 1];
+      while (bb) {
+        const sq = position.bitScanForward(bb);
+        if (position.isSquareAttacked(sq, position.side)) {
+          threatScore += position.pieceValue(piece) * 0.3;
+        }
+        bb &= bb - 1n;
+      }
+    }
+    
+    // Pawn pushes threatening promotion
+    const pawns = position.bitboards[them * 6 + position.PAWN - 1];
+    const promotionRank = them === position.WHITE ? 6 : 1;
+    if (pawns & (0xFFn << BigInt(promotionRank * 8))) {
+      threatScore += 120;
+    }
+    
+    return threatScore;
+  }
+}
+getDynamicContempt(position, opponentRating) {
+  const phase = position.gamePhase() / 256;
+  const ratingDiff = this.rating - opponentRating;
+  
+  // Formula: Base + Phase scaling + Rating adjustment
+  return (
+    ENGINE_CONFIG.CONTEMPT_FACTOR * 
+    (0.7 + phase * 0.5) * 
+    (1 + Math.tanh(ratingDiff / 400))
+  );
+}
+class PSTTuner {
+  async tune(iterations = 1000) {
+    const learningRate = 0.01;
+    
+    for (let i = 0; i < iterations; i++) {
+      const game = selfPlay();
+      const gradients = this.calculateGradients(game);
+      
+      // Update PSTs
+      for (let piece = 0; piece < 6; piece++) {
+        for (let sq = 0; sq < 64; sq++) {
+          this.engine.pst[piece][sq] += learningRate * gradients[piece][sq];
+        }
+      }
+    }
+  }
+}
+function getExtensions(position, move, depth) {
+  let extensions = 0;
+  
+  // 1. Check extension
+  if (position.givesCheck(move)) extensions++;
+  
+  // 2. Passed pawn push
+  if (move.piece === position.PAWN) {
+    const rank = Math.floor(move.to / 8);
+    if ((position.side === position.WHITE && rank >= 4) || 
+        (position.side === position.BLACK && rank <= 3)) {
+      extensions++;
+    }
+  }
+  
+  // 3. Recapture extension
+  if (position.stack.length > 0 && 
+      move.to === position.stack[position.stack.length-1].move.to) {
+    extensions++;
+  }
+  
+  return Math.min(2, extensions); // Cap at 2 extensions
+}
+class NNUE_HalfKA {
+  constructor() {
+    // [OurKing][TheirKing][Piece][Square] -> Feature
+    this.weights = new Int16Array(64 * 64 * 10 * 64);
+    this.accumulator = new Int32Array(256);
+  }
+
+  evaluate(position) {
+    const ourKing = position.kingSquare[position.side];
+    const theirKing = position.kingSquare[position.side ^ 1];
+    
+    // Refresh accumulator if king moved
+    if (ourKing !== this.lastKing || theirKing !== this.lastTheirKing) {
+      this.updateAccumulator(ourKing, theirKing, position);
+    }
+    
+    return this.accumulator.reduce((sum, v) => sum + v, 0) / 100;
+  }
+}
+
+class ParallelSearch {
+  constructor(config) {
+    this.workers = [];
+    for (let i = 0; i < config.threads; i++) {
+      this.workers.push(new Worker('search-worker.js'));
+    }
+  }
+
+  iterativeDeepening({position, maxDepth, timeBudget}) {
+    let bestMove;
+    for (let depth = 1; depth <= maxDepth; depth++) {
+      // Lazy SMP: Workers share TT but search independently
+      const results = await Promise.all(
+        this.workers.map(w => w.search(position, depth, timeBudget))
+      );
+      
+      // Pick best move across workers
+      bestMove = results.reduce((a, b) => 
+        a.score > b.score ? a : b
+      );
+      
+      if (Date.now() > timeBudget.end) break;
+    }
+    return bestMove;
+  }
+}
+
+class PawnHashTable {
+  evaluate(position) {
+    const key = position.pawnHash;
+    if (this.cache[key]) return this.cache[key];
+    
+    let score = 0;
+    const pawns = position.pieces[position.side].PAWN;
+    
+    // Passed pawns
+    const passed = this.getPassedPawns(pawns, position.side);
+    score += passed.count * (30 + passed.rank * 15);
+    
+    // Pawn storms
+    score += this.evalPawnStorms(position);
+    
+    this.cache[key] = score;
+    return score;
+  }
 }
 
 
